@@ -41,34 +41,62 @@ Currently, it supports the following. Check [roadmap](#orgc5a9de8) for upcoming 
 
 ### Installation
 
-These instructions were tested on `NixOS:Python3.10` and `ArchLinux:Python3.10` but should work for any other OS, if you face any installation issues please feel free to [create issues](https://github.com/geekodour/wscribe/issues). I&rsquo;ll try to put out a docker image sometime.
+Make sure [FFmpeg](https://ffmpeg.org/download.html) is installed (`brew install ffmpeg` on macOS, `sudo apt install ffmpeg` on Debian/Ubuntu).
 
-1.  1. Set required env var
+
+#### Option A — Apple Silicon Mac (mlx-whisper backend, recommended for Mac users)
+
+No model download or `WSCRIBE_MODELS_DIR` setup required — models are downloaded automatically from Hugging Face on first use.
+
+```shell
+# Install uv (skip if already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install wscribe with the mlx extra
+uv tool install "wscribe[mlx]"
+
+# Transcribe using an mlx-community model
+wscribe transcribe audio.mp3 transcription.json \
+  --backend mlx-whisper \
+  --model mlx-community/whisper-large-v3-turbo
+
+# See all available mlx models
+wscribe info
+```
+
+
+#### Option B — Linux / Intel Mac / GPU (faster-whisper backend)
+
+1.  **Set required env var**
 
     -   `WSCRIBE_MODELS_DIR` : Path to the directory where whisper models should be downloaded to.
     
+        ```bash
         export WSCRIBE_MODELS_DIR=$XDG_DATA_HOME/whisper-models # example
+        ```
 
-2.  2. Download the models
+2.  **Download the models**
 
-    1.  Recommended
+    -   Recommended: use the [helper script](https://github.com/geekodour/wscribe/blob/main/scripts/fw_dw_hf_wo_lfs.sh), it&rsquo;ll download the models to `WSCRIBE_MODELS_DIR`.
     
-        -   Recommended way for downloading the models is to use the [helper script](https://github.com/geekodour/wscribe/blob/main/scripts/fw_dw_hf_wo_lfs.sh), it&rsquo;ll download the models to `WSCRIBE_MODELS_DIR`.
-            
-                cd /tmp # temporary script, only needed to download the models
-                curl https://raw.githubusercontent.com/geekodour/wscribe/main/scripts/fw_dw_hf_wo_lfs.sh
-                chmod u+x fw_dw_hf_wo_lfs.sh
-                ./fw_dw_hf_wo_lfs.sh tiny # other models: tiny, small, medium and large-v2
+        ```shell
+        cd /tmp
+        curl https://raw.githubusercontent.com/geekodour/wscribe/main/scripts/fw_dw_hf_wo_lfs.sh
+        chmod u+x fw_dw_hf_wo_lfs.sh
+        ./fw_dw_hf_wo_lfs.sh tiny # other models: tiny, small, medium and large-v2
+        ```
     
-    2.  Manual
-    
-        You can download the models directly [from here](https://huggingface.co/guillaumekln) using `git lfs`, make sure you download/copy them to `WSCRIBE_MODELS_DIR`
+    -   Manual: download directly [from here](https://huggingface.co/guillaumekln) using `git lfs` and copy to `WSCRIBE_MODELS_DIR`.
 
-3.  3. Install wscribe
-
-    Assuming you already have a working `python>=3.10` setup
+3.  **Install wscribe**
     
-        pip install wscribe
+    ```shell
+    # Install uv (skip if already installed)
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    
+    # Install wscribe
+    uv tool install wscribe
+    ```
 
 
 <a id="orge14eae7"></a>
