@@ -1,10 +1,8 @@
-from ctypes import Union
 from dataclasses import dataclass
 from typing import Any, Mapping, TypedDict
 
 import numpy as np
 import structlog
-from faster_whisper.audio import decode_audio  # type: ignore
 
 LOGGER = structlog.get_logger()
 SUPPORTED_MODELS = ["tiny", "small", "medium", "large-v2"]
@@ -81,4 +79,5 @@ class Audio:
         raise NotImplementedError()
 
     def convert_audio(self) -> np.ndarray:
+        from faster_whisper.audio import decode_audio  # type: ignore[import]
         return decode_audio(self.local_source_path, split_stereo=False, sampling_rate=self.sampling_rate)  # type: ignore
