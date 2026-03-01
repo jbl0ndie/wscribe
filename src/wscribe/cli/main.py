@@ -7,6 +7,7 @@ import click
 import structlog
 
 from wscribe.backends.fasterwhisper import FasterWhisperBackend
+from wscribe.backends.mlxwhisper import MLX_SUPPORTED_MODELS, MLXWhisperBackend
 from wscribe.sources.local import LocalAudio
 
 from ..core import SUPPORTED_MODELS
@@ -17,7 +18,7 @@ LOGGER = structlog.get_logger(ui="cli")
 
 @click.group()
 def cli():
-    """CLI for audio transcription using faster-whisper"""
+    """CLI for audio transcription (faster-whisper or mlx-whisper backends)"""
     pass
 
 
@@ -43,9 +44,17 @@ def cli():
 @click.option(
     "-m",
     "--model",
-    help="model should already be downloaded",
-    type=click.Choice(SUPPORTED_MODELS, case_sensitive=True),
+    help="model size or HF repo ID. faster-whisper: tiny/small/medium/large-v2. mlx-whisper: mlx-community/... repo ID.",
+    type=click.STRING,
     default="medium",
+    show_default=True,
+)
+@click.option(
+    "-b",
+    "--backend",
+    help="transcription backend to use",
+    type=click.Choice(["faster-whisper", "mlx-whisper"], case_sensitive=True),
+    default="faster-whisper",
     show_default=True,
 )
 @click.option(
@@ -63,7 +72,7 @@ def cli():
     is_flag=True,
 )
 def transcribe(
-    source, destination, format, model, gpu, language, debug, stats, quiet, vad
+    source, destination, format, model, backend, gpu, language, debug, stats, quiet, vad
 ):
     """
     Transcribes SOURCE to DESTINATION. Where SOURCE can be local path to an audio/video file and
@@ -75,10 +84,26 @@ def transcribe(
         source=source, destination=destination, format=format, model=model, gpu=gpu
     )
 
-    device, quantization = ("cuda", "float16") if gpu else ("cpu", "int8")
-    m = FasterWhisperBackend(model_size=model, device=device, quantization=quantization)
-    m.load()
-    log.debug(f"model loaded with {device}-{quantization}")
+    if backend == "mlx-whisper":
+        if model not in MLX_SUPPORTED_MODELS:
+            raise click.BadParameter(
+                f"For --backend mlx-whisper, --model must be one of:\n  "
+                + "\n  ".join(MLX_SUPPORTED_MODELS),
+                param_hint="'--model'",
+            )
+        m = MLXWhisperBackend(model_size=model)
+        m.load()
+        log.debug("mlx-whisper model ready", model=model)
+    else:
+        if model not in SUPPORTED_MODELS:
+            raise click.BadParameter(
+                f"For --backend faster-whisper, --model must be one of: {SUPPORTED_MODELS}",
+                param_hint="'--model'",
+            )
+        device, quantization = ("cuda", "float16") if gpu else ("cpu", "int8")
+        m = FasterWhisperBackend(model_size=model, device=device, quantization=quantization)
+        m.load()
+        log.debug(f"model loaded with {device}-{quantization}")
 
     audio_start_time = time.perf_counter()
     audio = LocalAudio(source=source).convert_audio()
@@ -95,11 +120,14 @@ def transcribe(
         original_audio_time = audio.shape[0] / LocalAudio.sampling_rate
         transcription_time = ts_end_time - ts_start_time
         audio_conversion_time = audio_end_time - audio_start_time
+        if backend == "mlx-whisper":
+            backend_tag = "mlx|apple-silicon"
+        else:
+            backend_tag = f"{device}|{quantization}"
         click.echo(
             " | ".join(
                 [
-                    device,
-                    quantization,
+                    backend_tag,
                     model,
                     str(round(audio_conversion_time, 1)) + "s",
                     str(round(original_audio_time / 60, 1)) + "m",
@@ -113,7 +141,10 @@ def transcribe(
 @cli.command()
 def info():
     """Information about related files and directories"""
-    click.echo(f"WSCRIBE_MODELS_DIR: {os.environ['WSCRIBE_MODELS_DIR']}")
+    click.echo(f"WSCRIBE_MODELS_DIR: {os.environ.get('WSCRIBE_MODELS_DIR', '(not set)')}")
+    click.echo("Available MLX models (--backend mlx-whisper):")
+    for repo in MLX_SUPPORTED_MODELS:
+        click.echo(f"  {repo}")
 
 
 if __name__ == "__main__":
