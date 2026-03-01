@@ -1,36 +1,40 @@
 #
 # deps
 #
-.PHONY: deps-sync # sync dependencies
+.PHONY: deps-sync # sync and install all dependencies
 deps-sync:
-	poetry install --sync
+	uv sync --all-groups
 
-.PHONY: deps-show # build source and wheel
+.PHONY: deps-sync-mlx # sync and install mlx optional dependencies (Apple Silicon)
+deps-sync-mlx:
+	uv sync --all-groups --extra mlx
+
+.PHONY: deps-show # list installed packages
 deps-show:
-	poetry show
+	uv pip list
 
 #
 # publishing
 #
 .PHONY: package-publish # publish to pypi
 package-publish:
-	poetry publish
+	uv publish
 
 .PHONY: package-publish-test # publish to test.pypi
 package-publish-test:
-	poetry publish -r test-pypi
+	uv publish --index testpypi
 
 .PHONY: package-build # build source and wheel
 package-build:
-	poetry build
+	uv build
 
-.PHONY: package-version-bump-patch # bump patch version
+.PHONY: package-version-bump-patch # bump patch version (edit pyproject.toml manually or use uv version)
 package-version-bump-patch:
-	poetry version patch
+	uv version --bump patch
 
 .PHONY: package-version-bump-prerelease # bump prerelease version
 package-version-bump-prerelease:
-	poetry version prerelease
+	uv version --bump patch --pre alpha
 
 #
 # tests
@@ -40,25 +44,25 @@ spin: typecheck lint test-quiet
 
 .PHONY: test # run test
 test:
-	pytest
+	uv run pytest
 
 # mypy won't report anything if you haven't type hinted/annotated your code
 .PHONY: typecheck # run mypy
 typecheck:
-	mypy .
+	uv run mypy .
 
 .PHONY: lint # run linter
 lint:
-	#ruff .
-	isort . --check-only
-	black . --check
+	#uv run ruff check .
+	uv run isort . --check-only
+	uv run black . --check
 
 .PHONY: test-quiet # run test quietly
 test-quiet:
-	pytest -q
+	uv run pytest -q
 
 .PHONY: test-dry-run # dry-run test, just get test names
 test-dry-run:
-	pytest --collect-only
+	uv run pytest --collect-only
 
 include Makefile.common
