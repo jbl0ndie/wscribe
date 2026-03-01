@@ -267,6 +267,75 @@ Stores the initialised `WhisperModel` on `self.model`. Must be called before `tr
 | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | C++ implementation, likely lower memory footprint |
 | [WhisperX](https://github.com/m-bain/whisperX) | Adds speaker diarization support |
 
+### `MLXWhisperBackend`
+
+**File:** `src/wscribe/backends/mlxwhisper.py`
+
+Apple Silicon backend powered by [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper). Requires the `[mlx]` optional extra: `uv tool install "wscribe[mlx]"`.
+
+```python
+@dataclass(kw_only=True)
+class MLXWhisperBackend(Backend):
+    name: str = "mlx-whisper"
+```
+
+#### Model identification
+
+Unlike `FasterWhisperBackend`, models are not downloaded manually. The `model_size` field holds a Hugging Face repo ID from `MLX_SUPPORTED_MODELS` and the mlx-whisper library handles caching via the HF hub automatically.
+
+```python
+MLX_SUPPORTED_MODELS: list[str] = [
+    "mlx-community/whisper-tiny-mlx",
+    "mlx-community/whisper-tiny-mlx-q4",
+    "mlx-community/whisper-small-mlx",
+    "mlx-community/whisper-small-mlx-q4",
+    "mlx-community/whisper-medium-mlx",
+    "mlx-community/whisper-medium-mlx-q4",
+    "mlx-community/whisper-large-v2-mlx",
+    "mlx-community/whisper-large-v2-mlx-4bit",
+    "mlx-community/whisper-large-v3-mlx",
+    "mlx-community/whisper-large-v3-mlx-4bit",
+    "mlx-community/whisper-large-v3-turbo",
+    "mlx-community/whisper-large-v3-turbo-q4",
+    "mlx-community/distil-whisper-large-v3",
+]
+```
+
+#### Soft import pattern
+
+`mlx_whisper` is imported at module level inside a `try/except ImportError` block and set to `None` on failure. This means the module can always be imported without raising — the `RuntimeError` is deferred to `load()` so that users on non-Apple-Silicon machines get a clear error message only when they actually try to use the backend.
+
+#### `load() -> None`
+
+Checks that `mlx_whisper is not None`; raises `RuntimeError` with install instructions if not. No model is explicitly loaded — mlx-whisper lazy-loads on the first `transcribe()` call.
+
+#### `transcribe(input, language=None, silent=False, vad=False) -> list[TranscribedData]`
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `input` | `np.ndarray` | required | Mono 16 kHz float32 array from `Audio.convert_audio()`. |
+| `language` | `str \| None` | `None` | BCP-47 language code. `None` triggers auto-detection. |
+| `silent` | `bool` | `False` | If `True`, passes `verbose=None` to suppress output. |
+| `vad` | `bool` | `False` | **Ignored.** mlx-whisper has no VAD filter; a warning is logged. |
+
+**Internals:**
+
+1. Calls `mlx_whisper.transcribe(input, path_or_hf_repo=self.model_size, word_timestamps=True, language=language, verbose=...)`.
+2. Iterates `raw["segments"]`; skips segments with no `words`.
+3. Maps mlx-whisper's word dict keys: `w["word"]` → `"text"`, `w["probability"]` → `"score"`.
+4. Segment-level score is the mean of its word scores.
+
+#### Differences from `FasterWhisperBackend`
+
+| Aspect | FasterWhisperBackend | MLXWhisperBackend |
+|---|---|---|
+| Hardware | CPU or CUDA | Apple Silicon only |
+| Model storage | `$WSCRIBE_MODELS_DIR` (manual download) | HF hub cache (automatic) |
+| Model identifier | Short name (`tiny`, `medium`, …) | HF repo ID (`mlx-community/...`) |
+| Progress display | tqdm bar (audio-time units) | mlx-whisper's own output |
+| VAD support | Yes (`vad_filter` param) | No (logs warning and ignores) |
+| Install extra | *(always installed)* | `wscribe[mlx]` |
+
 ---
 
 ## 6. Sources
@@ -658,8 +727,8 @@ log.debug("model loaded with {device}-{quantization}")
 |---|---|
 | Name | `wscribe` |
 | Version | `0.1.5` |
-| Python | `^3.10` |
-| Build backend | `poetry-core` |
+| Python | `>=3.10` |
+| Build backend | `hatchling` |
 | Package root | `src/wscribe` |
 | PyPI readme | `docs/README.md` |
 
@@ -667,13 +736,19 @@ log.debug("model loaded with {device}-{quantization}")
 
 | Package | Version constraint | Role |
 |---|---|---|
-| `structlog` | `^23.1.0` | Structured logging |
-| `faster-whisper` | `^0.9.0` | Inference engine (also provides `decode_audio`) |
-| `click` | `^8.1.6` | CLI framework |
+| `structlog` | `>=23.1.0` | Structured logging |
+| `faster-whisper` | `>=0.9.0` | Inference engine (also provides `decode_audio`) |
+| `click` | `>=8.1.6` | CLI framework |
 
 > `numpy`, `tqdm`, and `ctranslate2` are transitive dependencies pulled in by `faster-whisper`.
 
-### Dev dependencies (Poetry group `dev`)
+### Optional dependencies
+
+| Extra | Package | Purpose |
+|---|---|---|
+| `mlx` | `mlx-whisper>=0.4.3` | Apple Silicon backend; install with `uv tool install "wscribe[mlx]"` |
+
+### Dev dependencies (group `dev`)
 
 | Package | Purpose |
 |---|---|
@@ -684,12 +759,12 @@ log.debug("model loaded with {device}-{quantization}")
 | `black` | Code formatter (used in `make lint`) |
 | `snoop` | Print-based tracing/debugging |
 
-### Test dependencies (Poetry group `test`)
+### Test dependencies (group `test`)
 
 | Package | Purpose |
 |---|---|
-| `pytest` | `^7.3.1` — test runner |
-| `mypy` | `^1.3.0` — static type checker (used in `make typecheck`) |
+| `pytest` | `>=7.3.1` — test runner |
+| `mypy` | `>=1.3.0` — static type checker (used in `make typecheck`) |
 
 ### pytest configuration
 
@@ -703,6 +778,40 @@ log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 Live log output is always enabled at INFO level during test runs.
 
+### uv
+
+The project uses [uv](https://docs.astral.sh/uv/) as its package manager. uv is a fast, single-binary Rust-based tool that replaces `pip`, `pip-tools`, `venv`, and `poetry` for this project.
+
+**Install uv:**
+```shell
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Key workflows:**
+
+| Task | Command |
+|---|---|
+| Install all deps (core + dev + test) | `uv sync --all-groups` |
+| Install with mlx extra (Apple Silicon) | `uv sync --all-groups --extra mlx` |
+| Run a script in the project venv | `uv run pytest` |
+| Install as a standalone tool | `uv tool install wscribe` |
+| Install with mlx extra as a tool | `uv tool install "wscribe[mlx]"` |
+| Build sdist + wheel | `uv build` |
+| Publish to PyPI | `uv publish` |
+| Publish to Test PyPI | `uv publish --index testpypi` |
+| Regenerate lockfile | `uv lock` |
+
+**Lockfile:** `uv.lock` is committed to the repository. It is a cross-platform lockfile that pins all transitive dependencies. Unlike `poetry.lock`, it is a TOML file and human-readable.
+
+**Test PyPI index** is configured in `pyproject.toml`:
+```toml
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+```
+
 ---
 
 ## 11. Tooling
@@ -711,19 +820,20 @@ Live log output is always enabled at INFO level during test runs.
 
 | Target | Command | Description |
 |---|---|---|
-| `deps-sync` | `poetry install --sync` | Sync all dependencies from lockfile |
-| `deps-show` | `poetry show` | List all installed packages |
-| `package-publish` | `poetry publish` | Publish to PyPI |
-| `package-publish-test` | `poetry publish -r test-pypi` | Publish to Test PyPI |
-| `package-build` | `poetry build` | Build sdist + wheel |
-| `package-version-bump-patch` | `poetry version patch` | Increment patch version |
-| `package-version-bump-prerelease` | `poetry version prerelease` | Increment prerelease version |
+| `deps-sync` | `uv sync --all-groups` | Sync all dependencies from lockfile |
+| `deps-sync-mlx` | `uv sync --all-groups --extra mlx` | Sync deps including Apple Silicon mlx extra |
+| `deps-show` | `uv pip list` | List all installed packages |
+| `package-publish` | `uv publish` | Publish to PyPI |
+| `package-publish-test` | `uv publish --index testpypi` | Publish to Test PyPI |
+| `package-build` | `uv build` | Build sdist + wheel |
+| `package-version-bump-patch` | `uv version --bump patch` | Increment patch version |
+| `package-version-bump-prerelease` | `uv version --bump patch --pre alpha` | Increment prerelease version |
 | `spin` | `typecheck lint test-quiet` | Full CI check suite (type check + lint + quiet tests) |
-| `test` | `pytest` | Run all tests with verbose output |
-| `typecheck` | `mypy .` | Run static type checker |
-| `lint` | `isort --check-only` + `black --check` | Check import ordering and code formatting (ruff is commented out) |
-| `test-quiet` | `pytest -q` | Run tests quietly |
-| `test-dry-run` | `pytest --collect-only` | List all test names without running them |
+| `test` | `uv run pytest` | Run all tests with verbose output |
+| `typecheck` | `uv run mypy .` | Run static type checker |
+| `lint` | `uv run isort --check-only` + `uv run black --check` | Check import ordering and code formatting (ruff is commented out) |
+| `test-quiet` | `uv run pytest -q` | Run tests quietly |
+| `test-dry-run` | `uv run pytest --collect-only` | List all test names without running them |
 | `help` | *(auto-generated)* | Lists all `.PHONY` targets that have a `# comment` annotation |
 
 ### Makefile.common
@@ -868,16 +978,34 @@ The following are **not tested**:
        name: str = "my-backend"
        # add your fields here
 
+       def supported_model_sizes(self) -> list[str]:
+           return ["model-a", "model-b"]  # or a module-level constant
+
        def model_path(self) -> str:
-           # return path to model; raise RuntimeError if missing
+           # return path/ID for the model; raise RuntimeError if unavailable
 
        def load(self) -> None:
-           # initialise self.model
+           # initialise self.model (or soft-import and check here)
 
        def transcribe(self, input: np.ndarray, **kwargs) -> list[TranscribedData]:
            # run inference; return list[TranscribedData]
    ```
-3. Import and instantiate in `cli/main.py` (either hardcode or add a `--backend` CLI option).
+3. If the backend has optional system dependencies, use the soft-import pattern:
+   ```python
+   try:
+       import my_lib
+   except ImportError:
+       my_lib = None
+   ```
+   Then raise a helpful `RuntimeError` in `load()` when `my_lib is None`.
+4. Expose any new model identifiers as a module-level constant (e.g. `MY_SUPPORTED_MODELS`) so the CLI can import them for validation.
+5. Wire up in `src/wscribe/cli/main.py`:
+   - Add the new backend name to the `click.Choice` list on `--backend`.
+   - Import the backend class and its model list.
+   - Add an `elif backend == "my-backend":` branch in the `transcribe` command to validate the model and instantiate the class.
+   - Update the `stats` block if the backend uses different device/quantisation concepts.
+   - Update `info()` to list the new backend's supported models.
+6. If the backend requires an optional PyPI dependency, add it under `[project.optional-dependencies]` in `pyproject.toml` and re-run `uv lock`.
 
 ---
 
