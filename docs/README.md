@@ -48,12 +48,15 @@ Make sure [FFmpeg](https://ffmpeg.org/download.html) is installed (`brew install
 
 No model download or `WSCRIBE_MODELS_DIR` setup required — models are downloaded automatically from Hugging Face on first use.
 
+uv manages Python for you, so no existing Python installation is needed.
+
 ```shell
 # Install uv (skip if already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install wscribe with the mlx extra
-uv tool install "wscribe[mlx]"
+# uv will download Python 3.12 automatically if needed
+uv tool install --python 3.12 "wscribe[mlx]"
 
 # Transcribe using an mlx-community model
 wscribe transcribe audio.mp3 transcription.json \
@@ -95,7 +98,8 @@ wscribe info
     curl -LsSf https://astral.sh/uv/install.sh | sh
     
     # Install wscribe
-    uv tool install wscribe
+    # uv will download Python 3.12 automatically if needed
+    uv tool install --python 3.12 wscribe
     ```
 
 
