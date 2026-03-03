@@ -1,5 +1,5 @@
 import pytest
-from wscribe.compare import parse_timestamp, normalize_text, align_by_time_window
+from wscribe.compare import parse_timestamp, normalize_text, align_by_time_window, score_word_group
 
 
 class TestParseTimestamp:
@@ -88,3 +88,45 @@ class TestAlignByTimeWindow:
         result = align_by_time_window(ref, other, tolerance=0.2)
         assert result[0][0]["text"] == "hello"
         assert result[1][0]["text"] == "world"
+
+
+class TestScoreWordGroup:
+    def test_all_agree(self):
+        ref = _word(1.0, "hello")
+        others = [_word(1.0, "hello"), _word(1.0, "hello")]
+        score, text = score_word_group(ref, others)
+        assert score == pytest.approx(1.0)
+        assert text == "hello"
+
+    def test_all_disagree(self):
+        ref = _word(1.0, "hello")
+        others = [_word(1.0, "world"), _word(1.0, "foo")]
+        score, text = score_word_group(ref, others)
+        # ref + 0 matching others = 1 of 3
+        assert score == pytest.approx(1 / 3, abs=0.01)
+
+    def test_majority_wins(self):
+        ref = _word(1.0, "hello")
+        others = [_word(1.0, "hello"), _word(1.0, "world")]
+        score, text = score_word_group(ref, others)
+        assert score == pytest.approx(2 / 3, abs=0.01)
+        assert text == "hello"
+
+    def test_none_match_scores_zero(self):
+        ref = _word(1.0, "hello")
+        others = [None, None]
+        score, text = score_word_group(ref, others)
+        assert score == pytest.approx(0.0)
+        assert text == "hello"  # falls back to reference
+
+    def test_punctuation_ignored_in_comparison(self):
+        ref = _word(1.0, "hello,")
+        others = [_word(1.0, "hello")]
+        score, text = score_word_group(ref, others)
+        assert score == pytest.approx(1.0)
+
+    def test_case_ignored_in_comparison(self):
+        ref = _word(1.0, "Hello")
+        others = [_word(1.0, "hello")]
+        score, text = score_word_group(ref, others)
+        assert score == pytest.approx(1.0)
