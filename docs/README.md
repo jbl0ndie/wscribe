@@ -41,7 +41,13 @@ Currently, it supports the following. Check [roadmap](#orgc5a9de8) for upcoming 
 
 ### Installation
 
-Make sure [FFmpeg](https://ffmpeg.org/download.html) is installed (`brew install ffmpeg` on macOS, `sudo apt install ffmpeg` on Debian/Ubuntu).
+uv handles Python and all Python dependencies automatically. The only things that need to be installed separately are system libraries. On macOS, install [Homebrew](https://brew.sh) if you haven't already, then:
+
+```shell
+brew install pkg-config ffmpeg
+```
+
+On Debian/Ubuntu: `sudo apt install pkg-config ffmpeg`
 
 
 #### Option A — Apple Silicon Mac (mlx-whisper backend, recommended for Mac users)

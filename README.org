@@ -10,7 +10,10 @@ Currently, it supports the following. Check [[#roadmap][roadmap]] for upcoming s
 - Inference interfaces: Python CLI
 - File exports: JSON, SRT, WebVTT
 *** Installation
-Make sure ~[[https://ffmpeg.org/download.html][FFmpeg]]~ is installed (macOS: ~brew install ffmpeg~, Debian/Ubuntu: ~sudo apt install ffmpeg~).
+uv handles Python and all Python dependencies automatically. The only things that need to be installed separately are system libraries, which require [[https://brew.sh][Homebrew]] on macOS:
+#+begin_src shell
+brew install pkg-config ffmpeg
+#+end_src
 **** Option A — Apple Silicon Mac (mlx-whisper backend, recommended for Mac users)
 No model download or ~WSCRIBE_MODELS_DIR~ setup required — models are downloaded automatically from Hugging Face on first use.
 
