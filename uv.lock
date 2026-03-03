@@ -2302,6 +2302,7 @@ name = "wscribe"
 version = "0.1.5"
 source = { editable = "." }
 dependencies = [
+    { name = "av" },
     { name = "click" },
     { name = "faster-whisper" },
     { name = "structlog" },
@@ -2329,6 +2330,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "av", specifier = ">=12.0.0" },
     { name = "click", specifier = ">=8.1.6" },
     { name = "faster-whisper", specifier = ">=0.9.0" },
     { name = "mlx-whisper", marker = "extra == 'mlx'", specifier = ">=0.4.3" },
