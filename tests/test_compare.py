@@ -1,5 +1,11 @@
 import pytest
-from wscribe.compare import parse_timestamp, normalize_text, align_by_time_window, score_word_group
+from wscribe.compare import (
+    parse_timestamp,
+    normalize_text,
+    align_by_time_window,
+    score_word_group,
+    compare_transcriptions,
+)
 
 
 class TestParseTimestamp:
@@ -130,3 +136,50 @@ class TestScoreWordGroup:
         others = [_word(1.0, "hello")]
         score, text = score_word_group(ref, others)
         assert score == pytest.approx(1.0)
+
+
+def _seg(start: float, end: float, text: str, words: list[dict]) -> dict:
+    return {"start": start, "end": end, "text": text, "score": 1.0, "words": words}
+
+
+class TestCompareTranscriptions:
+    def _two_identical(self):
+        w = [_word(1.0, "hello"), _word(2.0, "world")]
+        seg = [_seg(0.0, 3.0, "hello world", w)]
+        return [seg, seg]
+
+    def test_identical_inputs_score_one(self):
+        result = compare_transcriptions(self._two_identical(), tolerance=0.2)
+        for seg in result:
+            assert seg["score"] == pytest.approx(1.0)
+            for w in seg["words"]:
+                assert w["score"] == pytest.approx(1.0)
+
+    def test_output_schema(self):
+        result = compare_transcriptions(self._two_identical(), tolerance=0.2)
+        assert isinstance(result, list)
+        seg = result[0]
+        assert set(seg.keys()) == {"text", "start", "end", "score", "words"}
+        word = seg["words"][0]
+        assert set(word.keys()) == {"text", "start", "end", "score"}
+
+    def test_disjoint_words_score_zero(self):
+        w_a = [_word(1.0, "hello")]
+        w_b = [_word(9.0, "world")]
+        seg_a = [_seg(0.0, 2.0, "hello", w_a)]
+        seg_b = [_seg(8.0, 10.0, "world", w_b)]
+        result = compare_transcriptions([seg_a, seg_b], tolerance=0.2)
+        for seg in result:
+            for w in seg["words"]:
+                assert w["score"] == pytest.approx(0.0)
+
+    def test_segment_score_is_mean_of_word_scores(self):
+        w = [_word(1.0, "hello"), _word(2.0, "world")]
+        # second transcription agrees on first word, differs on second
+        w2 = [_word(1.0, "hello"), _word(2.0, "other")]
+        seg = [_seg(0.0, 3.0, "hello world", w)]
+        seg2 = [_seg(0.0, 3.0, "hello other", w2)]
+        result = compare_transcriptions([seg, seg2], tolerance=0.2)
+        word_scores = [w["score"] for w in result[0]["words"]]
+        expected_seg_score = round(sum(word_scores) / len(word_scores), 4)
+        assert result[0]["score"] == pytest.approx(expected_seg_score, abs=0.01)
