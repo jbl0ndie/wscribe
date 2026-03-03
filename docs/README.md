@@ -62,7 +62,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install wscribe with the mlx extra
 # uv will download Python 3.12 automatically if needed
-uv tool install --python 3.12 "wscribe[mlx]"
+uv tool install --python 3.12 "wscribe[mlx] @ git+https://github.com/jbl0ndie/wscribe.git"
 
 # Transcribe using an mlx-community model
 wscribe transcribe audio.mp3 transcription.json \
@@ -105,7 +105,7 @@ wscribe info
     
     # Install wscribe
     # uv will download Python 3.12 automatically if needed
-    uv tool install --python 3.12 wscribe
+    uv tool install --python 3.12 "wscribe @ git+https://github.com/jbl0ndie/wscribe.git"
     ```
 
 
