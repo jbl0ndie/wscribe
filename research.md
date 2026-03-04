@@ -1044,3 +1044,32 @@ The following are **not tested**:
    }
    ```
 4. The CLI's `--format` `click.Choice` and all routing are automatically derived from `WRITERS.keys()` — no other changes required.
+
+## 14. Transcription Comparison (`wscribe compare`)
+
+`compare.py` is a pure post-processing module — no backend dependency — that aligns two or
+more wscribe JSON files by timestamp and replaces every word/segment `score` with an
+**inter-transcription agreement score**.
+
+### Key functions
+
+| Function | Purpose |
+|---|---|
+| `parse_timestamp(s)` | `"HH:MM:SS.mmm"` → float seconds; floats pass through unchanged |
+| `normalize_text(text)` | lowercase + strip punctuation for comparison |
+| `align_by_time_window(ref, others, tolerance)` | match words across transcriptions by start time |
+| `score_word_group(ref_word, matches)` | majority-vote score + output text selection |
+| `compare_transcriptions(transcriptions, tolerance)` | orchestrate the above; return `list[TranscribedData]` |
+
+### Agreement score
+
+For a word present in N transcriptions, the score is `k / N` where k is the number of
+transcriptions that agree on the normalised text. A score of `0.0` means the word appears in
+only one transcription (highest priority for human review). Scores map directly onto
+wscribe-editor's existing `wordColor` thresholds with no editor changes.
+
+### CLI
+
+```
+wscribe compare file1.json file2.json [file3.json ...] --output out.json [--time-tolerance 0.2]
+```
