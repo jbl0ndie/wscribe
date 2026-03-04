@@ -12,6 +12,7 @@ from wscribe.sources.local import LocalAudio
 
 from ..core import SUPPORTED_MODELS
 from ..writers import WRITERS
+from .compare import compare as compare_command
 
 LOGGER = structlog.get_logger(ui="cli")
 
@@ -20,6 +21,9 @@ LOGGER = structlog.get_logger(ui="cli")
 def cli():
     """CLI for audio transcription (faster-whisper or mlx-whisper backends)"""
     pass
+
+
+cli.add_command(compare_command, name="compare")
 
 
 @cli.command()

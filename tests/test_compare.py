@@ -7,6 +7,12 @@ from wscribe.compare import (
     compare_transcriptions,
 )
 
+import json
+import os
+import tempfile
+from click.testing import CliRunner
+from wscribe.cli.main import cli
+
 
 class TestParseTimestamp:
     def test_zero(self):
@@ -183,3 +189,46 @@ class TestCompareTranscriptions:
         word_scores = [w["score"] for w in result[0]["words"]]
         expected_seg_score = round(sum(word_scores) / len(word_scores), 4)
         assert result[0]["score"] == pytest.approx(expected_seg_score, abs=0.01)
+
+
+SAMPLE_JSON = os.path.join(
+    os.environ.get("PROJECT_ROOT", ""),
+    "examples", "output", "sample.json",
+)
+
+
+class TestCompareCLI:
+    def test_requires_two_files(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["compare", SAMPLE_JSON, "--output", "/tmp/x.json"])
+        assert result.exit_code != 0
+
+    def test_smoke(self):
+        if not os.path.exists(SAMPLE_JSON):
+            pytest.skip("sample.json not available")
+        import logging
+        runner = CliRunner(mix_stderr=False)
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            out_path = f.name
+        try:
+            # Suppress Python logging during invoke to avoid pytest log_cli /
+            # Click CliRunner stream conflict on Python 3.14
+            logging.disable(logging.WARNING)
+            try:
+                result = runner.invoke(
+                    cli,
+                    ["compare", SAMPLE_JSON, SAMPLE_JSON, "--output", out_path],
+                )
+            finally:
+                logging.disable(logging.NOTSET)
+            assert result.exit_code == 0, result.output
+            data = json.loads(open(out_path).read())
+            assert isinstance(data, list)
+            assert len(data) > 0
+            seg = data[0]
+            assert {"text", "start", "end", "score", "words"} <= set(seg.keys())
+            # timestamp strings
+            assert isinstance(seg["start"], str)
+            assert ":" in seg["start"]
+        finally:
+            os.unlink(out_path)
