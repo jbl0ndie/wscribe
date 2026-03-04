@@ -1,11 +1,12 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 import structlog
 
 from ..compare import compare_transcriptions
+from ..core import TranscribedData
 from ..writers import WriteJSON
 
 LOGGER = structlog.get_logger(ui="cli")
@@ -53,7 +54,7 @@ def compare(files: tuple[str, ...], output: str, time_tolerance: float) -> None:
             raise click.ClickException(f"{path}: invalid JSON — {e}") from e
 
     LOGGER.info("comparing transcriptions", n=len(transcriptions), tolerance=time_tolerance)
-    result = compare_transcriptions(transcriptions, tolerance=time_tolerance)
+    result = cast(list[TranscribedData], compare_transcriptions(transcriptions, tolerance=time_tolerance))
 
     writer = WriteJSON(result=result, destination=Path(output))
     writer.write()
